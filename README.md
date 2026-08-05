@@ -23,6 +23,8 @@ Tool calling and agents are intentionally outside this project and belong in a s
 
 See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the lesson experiments, interface design, model strategy, technical constraints, milestones, and acceptance criteria.
 
+See [FEASIBILITY.md](FEASIBILITY.md) for measured browser/model results and the remaining cross-browser checks.
+
 ## Status
 
 The first application shell renders the editable false-history lesson and SmolLM2's published chat template as synchronized conversation and sequence views. The next implementation slice adds local wllama generation and stopping events.

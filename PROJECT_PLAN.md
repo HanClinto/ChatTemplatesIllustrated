@@ -155,11 +155,13 @@ The UI must label which level of fidelity it is showing. Never infer token IDs b
 
 ### Milestone 0: feasibility spike
 
-- Verify the exact Q4 GGUF URLs, licenses, CORS behavior, embedded templates, special tokens, and download sizes for the SmolLM2 pair.
-- Capture the rendered template and stopping behavior through wllama on Chrome, Firefox, and Safari.
-- Test whether `ignore_eos` suppresses every relevant end-of-generation token or EOS only; name the UI control according to observed behavior.
-- Find deterministic presets for all six lessons.
-- Decide the token-inspection fidelity and document any limitation in the UI.
+**Status:** Core Chromium/GitHub Pages path validated. See [FEASIBILITY.md](FEASIBILITY.md) for measured results and remaining cross-browser checks.
+
+- [x] Verify Q4 GGUF URLs, licenses, CORS behavior, embedded template, and special tokens for the SmolLM2 pair.
+- [ ] Capture model loading and stopping behavior on Chrome, Firefox, and Safari. Chromium is complete; Firefox and Safari remain.
+- [x] Test `ignore_eos` and name the control according to observed behavior. EOS and EOT are the same ID for the selected instruct checkpoint.
+- [ ] Finalize deterministic presets for all six lessons. The core comparisons work; template-mutation presets need further selection.
+- [x] Decide token-inspection fidelity and document the limitation in the interface and feasibility record.
 
 **Exit criterion:** A plain prototype can load each model, run raw and chat completion, visibly stop on a boundary, continue under a capped override, and reproduce the guided examples.
 
