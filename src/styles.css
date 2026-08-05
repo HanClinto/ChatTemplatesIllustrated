@@ -21,7 +21,7 @@ button:focus-visible,a:focus-visible,textarea:focus-visible { outline:3px solid 
 .lesson-thesis { padding:28px 4vw 32px; display:grid; grid-template-columns:minmax(130px,180px) minmax(280px,580px) minmax(280px,1fr); align-items:start; gap:30px; background:var(--white); }
 .lesson-thesis>span { margin-top:7px; }
 .lesson-thesis h2 { margin:0; font:600 28px/1.1 "Iowan Old Style",Georgia,serif; }
-.lesson-thesis p { max-width:700px; margin:3px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
+.lesson-thesis p { max-width:700px; margin:3px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }.lesson-thesis .try-this { margin-top:9px; color:var(--ink); }.try-this strong { color:var(--green); }
 .lab { min-height:700px; border-top:1px solid var(--line); display:grid; grid-template-columns:250px minmax(360px,.9fr) minmax(420px,1.1fr); background:var(--white); }
 .controls,.conversation-pane,.sequence-pane { min-width:0; padding:24px; }
 .controls { border-right:1px solid var(--line); background:var(--paper); }
@@ -34,6 +34,7 @@ button:focus-visible,a:focus-visible,textarea:focus-visible { outline:3px solid 
 .segmented button { min-height:36px; border:0; background:var(--white); font-size:11px; font-weight:750; cursor:pointer; }
 .segmented button+button { border-left:1px solid var(--line); }
 .segmented button.selected { background:var(--green); color:white; }
+.controls select { width:100%; min-height:38px; padding:0 8px; border:1px solid var(--line); border-radius:0; background:var(--white); font-size:10px; }
 .model-options { display:grid; gap:7px; }
 .model-options button { padding:10px; border:1px solid var(--line); display:grid; grid-template-columns:1fr auto; gap:3px 8px; background:var(--white); text-align:left; cursor:pointer; }
 .model-options button.selected { border-color:var(--green); box-shadow:3px 3px 0 var(--green-soft); }

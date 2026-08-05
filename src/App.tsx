@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { ArrowRight, BookOpen, Braces, ExternalLink, LoaderCircle, MessageSquareText, Play, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
-import { FALSE_HISTORY_PRESETS, renderSmolLMChat, type ChatMessage, type Role } from './chat-template'
+import { FALSE_HISTORY_PRESETS, renderSmolLMChat, type ChatMessage, type Role, type TemplateMode } from './chat-template'
 import type { GenerationResult } from './inference'
 import { LESSONS } from './lessons'
 import { MODELS } from './models'
@@ -18,6 +18,7 @@ function App() {
   const [messages, setMessages] = useState<ChatMessage[]>(() => structuredClone(FALSE_HISTORY_PRESETS.moon))
   const [generationRole, setGenerationRole] = useState<Role>('assistant')
   const [activeLesson, setActiveLesson] = useState('history')
+  const [templateMode, setTemplateMode] = useState<TemplateMode>('expected')
   const [modelId, setModelId] = useState(MODELS[1].id)
   const [loadedModelId, setLoadedModelId] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'generating'>('idle')
@@ -27,8 +28,9 @@ function App() {
   const [result, setResult] = useState<GenerationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const abortController = useRef<AbortController | null>(null)
-  const serialized = useMemo(() => renderSmolLMChat(messages, generationRole), [messages, generationRole])
+  const serialized = useMemo(() => renderSmolLMChat(messages, generationRole, templateMode), [messages, generationRole, templateMode])
   const lesson = LESSONS.find((item) => item.id === activeLesson) ?? LESSONS[0]
+  const lessonNumber = LESSONS.findIndex((item) => item.id === lesson.id) + 1
   const model = MODELS.find((item) => item.id === modelId) ?? MODELS[1]
 
   function selectPreset(nextPreset: 'moon' | 'planes') {
@@ -40,6 +42,14 @@ function App() {
   function editMessage(id: string, content: string) {
     setMessages((current) => current.map((message) => message.id === id ? { ...message, content, origin: 'edited' } : message))
     setResult(null)
+  }
+
+  function selectLesson(id: string) {
+    setActiveLesson(id)
+    setResult(null)
+    if (id !== 'learned-markers') setTemplateMode('expected')
+    if (id === 'either-side') setGenerationRole('user')
+    if (id === 'host-stops') setIgnoreEos(false)
   }
 
   async function runGeneration() {
@@ -95,19 +105,19 @@ function App() {
     </header>
 
     <section className="intro" id="top">
-      <p className="eyebrow">Interactive curriculum · Lesson 05</p>
+      <p className="eyebrow">Interactive curriculum · Lesson {String(lessonNumber).padStart(2, '0')}</p>
       <h1>See the transcript<br />the model actually sees.</h1>
       <p className="lede">A chat interface looks like separate messages. Underneath, a template turns them into one sequence of text and learned markers.</p>
     </section>
 
     <nav className="lesson-strip" aria-label="Lessons">
-      {LESSONS.map((item, index) => <button className={item.id === activeLesson ? 'active' : ''} key={item.id} onClick={() => setActiveLesson(item.id)} type="button"><span>{String(index + 1).padStart(2, '0')}</span>{item.label}</button>)}
+      {LESSONS.map((item, index) => <button className={item.id === activeLesson ? 'active' : ''} key={item.id} onClick={() => selectLesson(item.id)} type="button"><span>{String(index + 1).padStart(2, '0')}</span>{item.label}</button>)}
     </nav>
 
     <section className="lesson-thesis">
       <span>Current claim</span>
       <h2>{lesson.thesis}</h2>
-      <p>{activeLesson === 'history' ? 'Edit the supposed earlier answer. The next response receives your edited transcript as context; it does not retrieve a private memory of producing that answer.' : 'This lesson is wired into the shared lab shell and will receive its guided experiment during the curriculum milestone.'}</p>
+      <div><p>{lesson.explanation}</p><p className="try-this"><strong>Try this:</strong> {lesson.experiment}</p></div>
     </section>
 
     <section className="lab" aria-label="Chat template lab">
@@ -118,6 +128,13 @@ function App() {
           <button className={preset === 'moon' ? 'selected' : ''} onClick={() => selectPreset('moon')} type="button">Moon</button>
           <button className={preset === 'planes' ? 'selected' : ''} onClick={() => selectPreset('planes')} type="button">Planes</button>
         </div>
+        <label>Template treatment</label>
+        <select disabled={status !== 'idle'} onChange={(event) => { setTemplateMode(event.target.value as TemplateMode); setResult(null) }} value={templateMode}>
+          <option value="expected">Expected special markers</option>
+          <option value="plain-labels">Ordinary text labels</option>
+          <option value="no-boundaries">Remove end markers</option>
+          <option value="swap-roles">Swap user / assistant</option>
+        </select>
         <label>Continue as</label>
         <div className="segmented">
           <button className={generationRole === 'assistant' ? 'selected' : ''} onClick={() => setGenerationRole('assistant')} type="button">Assistant</button>
@@ -153,7 +170,7 @@ function App() {
         <div className="section-title"><span>03</span><h2>Serialized sequence</h2><Braces size={16} /></div>
         <div className="legend"><span><i className="marker-swatch" /> special marker</span><span><i className="text-swatch" /> message text</span></div>
         <SerializedSequence text={serialized} />
-        <p className="sequence-note">Rendered with SmolLM2's published chat template. Markers are reserved vocabulary entries; line breaks and message text are ordinary sequence content.</p>
+        <p className="sequence-note">{templateMode === 'expected' ? "Rendered with SmolLM2's published chat template." : 'This is a deliberate mutation of the published template.'} Highlighted markers are reserved vocabulary entries; line breaks and message text are ordinary sequence content.</p>
         <div className="timeline">
           <h3>Generation timeline</h3>
           {!result && <p>Run the model to reveal the separate model output and harness stop event.</p>}
