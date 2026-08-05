@@ -25,4 +25,17 @@ See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the lesson experiments, interface des
 
 ## Status
 
-Planning and feasibility validation. The first implementation milestone is a small wllama prototype that verifies the matched base/instruct checkpoints, chat-template rendering, EOS/EOT behavior, capped generation past an end marker, and available token-inspection fidelity.
+The first application shell renders the editable false-history lesson and SmolLM2's published chat template as synchronized conversation and sequence views. The next implementation slice adds local wllama generation and stopping events.
+
+## Development
+
+Node 22 is required.
+
+```sh
+npm install
+npm run dev
+npm run build
+npm run lint
+```
+
+The Vite base path is `/ChatTemplatesIllustrated/`. Pushes to `main` build and deploy through GitHub Actions.
