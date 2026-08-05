@@ -54,13 +54,8 @@ class MemoryStorageBackend implements StorageBackend {
   }
 }
 
-function isFirefox() {
-  return navigator.userAgent.includes('Firefox/')
-}
-
 async function createEngine(): Promise<{ instance: Wllama; mode: StorageMode }> {
   try {
-    if (isFirefox()) throw new Error('Firefox uses session storage for model compatibility')
     if (!navigator.storage?.getDirectory) throw new Error('OPFS is unavailable')
     await navigator.storage.getDirectory()
     return {
