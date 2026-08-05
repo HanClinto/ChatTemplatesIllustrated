@@ -17,7 +17,10 @@ function App() {
   const [preset, setPreset] = useState<'moon' | 'planes'>('moon')
   const [messages, setMessages] = useState<ChatMessage[]>(() => structuredClone(FALSE_HISTORY_PRESETS.moon))
   const [generationRole, setGenerationRole] = useState<Role>('assistant')
-  const [activeLesson, setActiveLesson] = useState('history')
+  const [activeLesson, setActiveLesson] = useState(() => {
+    const linkedLesson = window.location.hash.replace(/^#lesson-/, '')
+    return LESSONS.some((item) => item.id === linkedLesson) ? linkedLesson : 'history'
+  })
   const [templateMode, setTemplateMode] = useState<TemplateMode>('expected')
   const [modelId, setModelId] = useState(MODELS[1].id)
   const [loadedModelId, setLoadedModelId] = useState<string | null>(null)
@@ -46,6 +49,7 @@ function App() {
 
   function selectLesson(id: string) {
     setActiveLesson(id)
+    window.history.replaceState(null, '', `#lesson-${id}`)
     setResult(null)
     if (id !== 'learned-markers') setTemplateMode('expected')
     if (id === 'either-side') setGenerationRole('user')
@@ -179,7 +183,9 @@ function App() {
             <li><span>Model</span><p>Generated {result.generatedTokens} tokens one piece at a time.</p></li>
             <li><span>Harness</span><p>{result.finishReason === 'stop' ? `Stopped after an end-of-generation marker (EOS ${result.eosTokenId}, EOT ${result.eotTokenId}).` : result.finishReason === 'length' ? `Stopped at the ${ignoreEos ? '72-token safety cap while EOS was ignored' : 'maximum-token limit'}.` : `Generation finished with reason: ${result.finishReason ?? 'unknown'}.`}</p></li>
           </ol>}
+          {result && <div className="context-meter"><div><span>Context used</span><strong>{result.promptTokens + result.generatedTokens} / 1,024 tokens</strong></div><meter max="1024" value={result.promptTokens + result.generatedTokens} /></div>}
         </div>
+        {result && result.tokenPieces.length > 0 && <div className="token-inspector"><h3>Generated token pieces</h3><p>Selecting each piece happened before the next piece was scored. Spaces appear as <code>·</code> and line breaks as <code>↵</code>.</p><div>{result.tokenPieces.map((token, index) => <code key={`${token}-${index}`} title={`Generated token ${index + 1}`}>{token.replaceAll(' ', '·').replaceAll('\n', '↵')}</code>)}</div></div>}
       </div>
     </section>
 
