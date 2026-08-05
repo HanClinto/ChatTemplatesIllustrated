@@ -40,14 +40,14 @@ These outputs are examples from one small model, not behavioral guarantees for a
 
 - Static GitHub Pages can serve the application and bundled single-thread wllama WASM without cross-origin isolation headers.
 - Hugging Face model downloads work from the deployed origin. An aborted speculative `HEAD` request may appear in Chromium while the actual model download still succeeds.
-- Firefox Private Browsing exposes the OPFS API but rejects `navigator.storage.getDirectory()` with `SecurityError`. The application probes the operation before constructing wllama and falls back to a session-only in-memory model cache. Generation remains local, but the model must be downloaded again after the tab closes.
+- Firefox Private Browsing exposes the OPFS API but rejects `navigator.storage.getDirectory()` with `SecurityError`. Firefox's OPFS model path has also produced incomplete cached input and abnormal inference in upstream wllama reports. The application therefore uses a session-only in-memory model cache in Firefox and whenever the OPFS operation fails. Generation remains local, but the model must be downloaded again after the tab closes.
 - wllama v3 reports generated token pieces, usage counts, finish reason, EOS, and EOT metadata.
 - wllama v3 does not expose its former public prompt `tokenize`/`detokenize` methods. The current interface therefore shows exact rendered template text and model-reported prompt-token counts, but does not claim exact prompt token boundaries or IDs.
 - Lazy-loading inference keeps wllama out of the initial JavaScript chunk. The current production build is approximately 209 KB for the initial app and 303 KB for the deferred inference chunk, before compression.
 
 ## Still outstanding
 
-- Repeat model generation in a normal current Firefox window and in current Safari.
+- Repeat model generation in current Safari.
 - Verify mobile layout in a browser with an actual 390-pixel CSS viewport; the integrated test browser clamps its content panel below the application's supported 320-pixel minimum.
 - Select deterministic prompts for every template-mutation condition and document how much output variation remains across browser/runtime versions.
 - Investigate exact prompt token inspection only if a tokenizer can be guaranteed to match the loaded GGUF vocabulary and special-token configuration.
