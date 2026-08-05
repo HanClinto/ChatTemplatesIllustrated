@@ -8,11 +8,23 @@ export type StorageMode = 'persistent' | 'memory'
 export interface GenerationResult {
   text: string
   finishReason: 'stop' | 'length' | 'content_filter' | null
-  promptTokens: number
+  promptTokens: number | null
+  promptCharacters: number
   generatedTokens: number
   tokenPieces: string[]
   eosTokenId: number
   eotTokenId: number
+}
+
+export interface GenerationUpdate {
+  phase: 'prefilling' | 'generating'
+  generatedTokens: number
+  partialText: string
+}
+
+export interface LoadUpdate {
+  phase: 'storage' | 'loading' | 'initializing' | 'ready'
+  detail: string
 }
 
 let engine: Wllama | null = null
@@ -71,33 +83,52 @@ async function createEngine(): Promise<{ instance: Wllama; mode: StorageMode }> 
   }
 }
 
-export async function loadBrowserModel(model: BrowserModel, onProgress: (fraction: number) => void): Promise<StorageMode> {
-  if (loadedModelId === model.id && engine?.isModelLoaded()) return storageMode ?? 'persistent'
+export async function loadBrowserModel(model: BrowserModel, onProgress: (fraction: number) => void, onUpdate?: (update: LoadUpdate) => void): Promise<StorageMode> {
+  if (loadedModelId === model.id && engine?.isModelLoaded()) {
+    onUpdate?.({ phase: 'ready', detail: `${model.name} is already loaded.` })
+    return storageMode ?? 'persistent'
+  }
   if (engine) await engine.exit()
 
+  onUpdate?.({ phase: 'storage', detail: 'Checking persistent model storage...' })
   const created = await createEngine()
   engine = created.instance
   storageMode = created.mode
   engine.setCompat(null)
+  onUpdate?.({ phase: 'loading', detail: created.mode === 'persistent' ? 'Reading cached model data or downloading it...' : 'Downloading model data for this tab...' })
   await engine.loadModelFromUrl(model.url, {
     n_ctx: 1024,
     n_batch: 256,
     n_threads: 1,
     n_gpu_layers: 0,
     useCache: true,
-    progressCallback: ({ loaded, total }) => onProgress(total > 0 ? loaded / total : 0),
+    progressCallback: ({ loaded, total }) => {
+      const fraction = total > 0 ? loaded / total : 0
+      onProgress(fraction)
+      onUpdate?.({ phase: fraction >= 1 ? 'initializing' : 'loading', detail: fraction >= 1 ? 'Model data ready. Initializing the inference runtime...' : `Loading model data: ${Math.round(fraction * 100)}%` })
+    },
   })
   loadedModelId = model.id
   onProgress(1)
+  onUpdate?.({ phase: 'ready', detail: `${model.name} loaded and ready.` })
   return storageMode
 }
 
-export async function generateCompletion(prompt: string, options: { ignoreEos: boolean; seed: number; temperature: number; signal: AbortSignal }): Promise<GenerationResult> {
+export async function generateCompletion(prompt: string, options: { ignoreEos: boolean; seed: number; temperature: number; signal: AbortSignal }, onUpdate?: (update: GenerationUpdate) => void): Promise<GenerationResult> {
   if (!engine?.isModelLoaded()) throw new Error('Load a model before generating.')
 
-  const response = await engine.createCompletion({
+  let text = ''
+  let finishReason: GenerationResult['finishReason'] = null
+  let promptTokens: number | null = null
+  let generatedTokens = 0
+  const tokenPieces: string[] = []
+  onUpdate?.({ phase: 'prefilling', generatedTokens: 0, partialText: '' })
+
+  const maxTokens = options.ignoreEos ? 72 : 120
+  await engine.createCompletion({
     prompt,
-    max_tokens: options.ignoreEos ? 72 : 120,
+    stream: true,
+    max_tokens: maxTokens,
     temperature: options.temperature,
     top_k: 40,
     top_p: 0.95,
@@ -106,15 +137,29 @@ export async function generateCompletion(prompt: string, options: { ignoreEos: b
     logprobs: 5,
     n_probs: 5,
     abortSignal: options.signal,
+    onData: (chunk) => {
+      const choice = chunk.choices[0]
+      const token = (choice?.logprobs as unknown as { content?: Array<{ id: number }> } | null)?.content?.[0]
+      if (choice?.text) {
+        text += choice.text
+        tokenPieces.push(choice.text)
+      }
+      if (choice?.finish_reason) finishReason = choice.finish_reason
+      if (token && engine?.isTokenEOG(token.id)) finishReason = 'stop'
+      promptTokens = chunk.usage?.prompt_tokens ?? chunk.timings?.prompt_n ?? promptTokens
+      generatedTokens = chunk.usage?.completion_tokens ?? chunk.timings?.predicted_n ?? tokenPieces.length
+      onUpdate?.({ phase: 'generating', generatedTokens, partialText: text })
+    },
   })
-  const choice = response.choices[0]
+  if (!finishReason && generatedTokens >= maxTokens) finishReason = 'length'
 
   return {
-    text: choice?.text ?? '',
-    finishReason: choice?.finish_reason ?? null,
-    promptTokens: response.usage.prompt_tokens,
-    generatedTokens: response.usage.completion_tokens,
-    tokenPieces: choice?.logprobs?.tokens ?? [],
+    text,
+    finishReason,
+    promptTokens,
+    promptCharacters: prompt.length,
+    generatedTokens,
+    tokenPieces,
     eosTokenId: engine.getEOS(),
     eotTokenId: engine.getEOT(),
   }

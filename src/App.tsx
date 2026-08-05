@@ -1,11 +1,26 @@
 import { useMemo, useRef, useState } from 'react'
 import { ArrowRight, BookOpen, Braces, ExternalLink, LoaderCircle, MessageSquareText, Play, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
 import { FALSE_HISTORY_PRESETS, renderSmolLMChat, type ChatMessage, type Role, type TemplateMode } from './chat-template'
-import type { GenerationResult, StorageMode } from './inference'
+import type { GenerationResult, GenerationUpdate, LoadUpdate, StorageMode } from './inference'
 import { LESSONS } from './lessons'
 import { MODELS } from './models'
 
 const markerPattern = /(<\|im_start\|>|<\|im_end\|>)/g
+type ActivityPhase = LoadUpdate['phase'] | GenerationUpdate['phase']
+
+interface ActivityStep {
+  phase: ActivityPhase
+  detail: string
+}
+
+const activityActors: Record<ActivityPhase, string> = {
+  storage: 'Browser',
+  loading: 'Runtime',
+  initializing: 'Runtime',
+  ready: 'Model',
+  prefilling: 'Harness',
+  generating: 'Model',
+}
 
 function SerializedSequence({ text }: { text: string }) {
   return <pre className="sequence" aria-label="Serialized conversation">{text.split(markerPattern).map((part, index) => (
@@ -30,12 +45,19 @@ function App() {
   const [ignoreEos, setIgnoreEos] = useState(false)
   const [temperature, setTemperature] = useState(0.3)
   const [result, setResult] = useState<GenerationResult | null>(null)
+  const [partialText, setPartialText] = useState('')
+  const [activitySteps, setActivitySteps] = useState<ActivityStep[]>([])
   const [error, setError] = useState<string | null>(null)
   const abortController = useRef<AbortController | null>(null)
   const serialized = useMemo(() => renderSmolLMChat(messages, generationRole, templateMode), [messages, generationRole, templateMode])
   const lesson = LESSONS.find((item) => item.id === activeLesson) ?? LESSONS[0]
   const lessonNumber = LESSONS.findIndex((item) => item.id === lesson.id) + 1
   const model = MODELS.find((item) => item.id === modelId) ?? MODELS[1]
+  const currentActivity = activitySteps.at(-1)
+
+  function recordActivity(step: ActivityStep) {
+    setActivitySteps((current) => current.at(-1)?.phase === step.phase ? [...current.slice(0, -1), step] : [...current, step])
+  }
 
   function selectPreset(nextPreset: 'moon' | 'planes') {
     setPreset(nextPreset)
@@ -60,12 +82,14 @@ function App() {
   async function runGeneration() {
     setError(null)
     setResult(null)
+    setPartialText('')
+    setActivitySteps([])
     try {
       const { generateCompletion, loadBrowserModel } = await import('./inference')
       if (loadedModelId !== model.id) {
         setStatus('loading')
         setProgress(0)
-        const nextStorageMode = await loadBrowserModel(model, setProgress)
+        const nextStorageMode = await loadBrowserModel(model, setProgress, recordActivity)
         setStorageMode(nextStorageMode)
         setLoadedModelId(model.id)
       }
@@ -76,6 +100,12 @@ function App() {
         seed: 42,
         temperature,
         signal: abortController.current.signal,
+      }, (update) => {
+        setPartialText(update.partialText)
+        recordActivity({
+          phase: update.phase,
+          detail: update.phase === 'prefilling' ? `Prefilling the serialized prompt (${serialized.length} characters)...` : `Generating output: ${update.generatedTokens} token${update.generatedTokens === 1 ? '' : 's'}`,
+        })
       })
       setResult(completion)
     } catch (caught) {
@@ -153,7 +183,7 @@ function App() {
         </div>
         <label className="toggle"><input checked={ignoreEos} onChange={(event) => { setIgnoreEos(event.target.checked); setResult(null) }} type="checkbox" /> Ignore EOS for this run</label>
         <div className="temperature"><label htmlFor="temperature">Temperature <strong>{temperature.toFixed(1)}</strong></label><input id="temperature" max="1.5" min="0" onChange={(event) => setTemperature(Number(event.target.value))} step="0.1" type="range" value={temperature} /></div>
-        <div className="model-readout"><span>Status</span><strong>{loadedModelId === model.id ? `${model.name} ready` : `${model.name} not loaded`}</strong><small>{status === 'loading' ? `Downloading ${Math.round(progress * 100)}%` : ignoreEos ? 'Hard cap: 72 generated tokens' : 'Stops on the model end marker'}</small></div>
+        <div aria-live="polite" className="model-readout"><span>Status</span><strong>{status === 'loading' ? 'Loading model' : status === 'generating' ? 'Inference running' : loadedModelId === model.id ? `${model.name} ready` : `${model.name} not loaded`}</strong><small>{(status !== 'idle' ? currentActivity?.detail : null) ?? (status === 'loading' ? `Downloading ${Math.round(progress * 100)}%` : ignoreEos ? 'Hard cap: 72 generated tokens' : 'Stops on the model end marker')}</small></div>
         {storageMode === 'memory' && <p className="storage-warning" role="status">Persistent model caching is unavailable in this browser. The model is kept in memory for this tab and will download again next session.</p>}
         {status === 'generating'
           ? <button className="run-button stop" onClick={() => abortController.current?.abort()} type="button"><Square size={15} /> Stop generation</button>
@@ -170,7 +200,7 @@ function App() {
             <div><strong>{message.role}</strong><small>{message.origin === 'edited' ? 'edited by you' : 'preset text'}</small></div>
             <textarea aria-label={`${message.role} message`} onChange={(event) => editMessage(message.id, event.target.value)} rows={Math.max(2, Math.ceil(message.content.length / 58))} value={message.content} />
           </article>)}
-          {result ? <article className={`message generated ${generationRole}`}><div><strong>{generationRole}</strong><small>generated now</small></div><p>{result.text || '(The model emitted no visible text.)'}</p></article> : <div className={`generation-slot ${generationRole}`}><ArrowRight size={15} /><span>Model continues here as <strong>{generationRole}</strong></span></div>}
+          {result || status === 'generating' ? <article className={`message generated ${generationRole}`}><div><strong>{generationRole}</strong><small>{result ? 'generated now' : 'generating now'}</small></div><p>{result?.text || partialText || 'Prefilling prompt...'}</p></article> : <div className={`generation-slot ${generationRole}`}><ArrowRight size={15} /><span>Model continues here as <strong>{generationRole}</strong></span></div>}
         </div>
       </div>
 
@@ -181,13 +211,17 @@ function App() {
         <p className="sequence-note">{templateMode === 'expected' ? "Rendered with SmolLM2's published chat template." : 'This is a deliberate mutation of the published template.'} Highlighted markers are reserved vocabulary entries; line breaks and message text are ordinary sequence content.</p>
         <div className="timeline">
           <h3>Generation timeline</h3>
-          {!result && <p>Run the model to reveal the separate model output and harness stop event.</p>}
+          {!result && activitySteps.length === 0 && <p>Run the model to reveal loading, prefill, generation, and the harness stop event.</p>}
+          {!result && activitySteps.length > 0 && <ol aria-live="polite">
+            {activitySteps.map((step, index) => <li className={index === activitySteps.length - 1 ? 'active' : ''} key={step.phase}><span>{activityActors[step.phase]}</span><p>{step.detail}</p></li>)}
+          </ol>}
           {result && <ol>
-            <li><span>Harness</span><p>Sent {result.promptTokens} prompt tokens from the sequence above.</p></li>
+            <li><span>Harness</span><p>{result.promptTokens === null ? `Prefilled the ${result.promptCharacters}-character serialized prompt. This streaming API does not report its token count.` : `Sent ${result.promptTokens} prompt tokens from the sequence above.`}</p></li>
             <li><span>Model</span><p>Generated {result.generatedTokens} tokens one piece at a time.</p></li>
             <li><span>Harness</span><p>{result.finishReason === 'stop' ? `Stopped after an end-of-generation marker (EOS ${result.eosTokenId}, EOT ${result.eotTokenId}).` : result.finishReason === 'length' ? `Stopped at the ${ignoreEos ? '72-token safety cap while EOS was ignored' : 'maximum-token limit'}.` : `Generation finished with reason: ${result.finishReason ?? 'unknown'}.`}</p></li>
           </ol>}
-          {result && <div className="context-meter"><div><span>Context used</span><strong>{result.promptTokens + result.generatedTokens} / 1,024 tokens</strong></div><meter max="1024" value={result.promptTokens + result.generatedTokens} /></div>}
+          {result && result.promptTokens !== null && <div className="context-meter"><div><span>Context used</span><strong>{result.promptTokens + result.generatedTokens} / 1,024 tokens</strong></div><meter max="1024" value={result.promptTokens + result.generatedTokens} /></div>}
+          {result && result.promptTokens === null && <div className="context-meter"><div><span>Generated output</span><strong>{result.generatedTokens} tokens · 1,024-token context limit</strong></div></div>}
         </div>
         {result && result.tokenPieces.length > 0 && <div className="token-inspector"><h3>Generated token pieces</h3><p>Selecting each piece happened before the next piece was scored. Spaces appear as <code>·</code> and line breaks as <code>↵</code>.</p><div>{result.tokenPieces.map((token, index) => <code key={`${token}-${index}`} title={`Generated token ${index + 1}`}>{token.replaceAll(' ', '·').replaceAll('\n', '↵')}</code>)}</div></div>}
       </div>
