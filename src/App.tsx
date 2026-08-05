@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { ArrowRight, BookOpen, Braces, ExternalLink, LoaderCircle, MessageSquareText, Play, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
 import { FALSE_HISTORY_PRESETS, renderSmolLMChat, type ChatMessage, type Role, type TemplateMode } from './chat-template'
-import type { GenerationResult } from './inference'
+import type { GenerationResult, StorageMode } from './inference'
 import { LESSONS } from './lessons'
 import { MODELS } from './models'
 
@@ -24,6 +24,7 @@ function App() {
   const [templateMode, setTemplateMode] = useState<TemplateMode>('expected')
   const [modelId, setModelId] = useState(MODELS[1].id)
   const [loadedModelId, setLoadedModelId] = useState<string | null>(null)
+  const [storageMode, setStorageMode] = useState<StorageMode | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'generating'>('idle')
   const [progress, setProgress] = useState(0)
   const [ignoreEos, setIgnoreEos] = useState(false)
@@ -64,7 +65,8 @@ function App() {
       if (loadedModelId !== model.id) {
         setStatus('loading')
         setProgress(0)
-        await loadBrowserModel(model, setProgress)
+        const nextStorageMode = await loadBrowserModel(model, setProgress)
+        setStorageMode(nextStorageMode)
         setLoadedModelId(model.id)
       }
       setStatus('generating')
@@ -91,6 +93,7 @@ function App() {
       const { clearModelCache } = await import('./inference')
       await clearModelCache()
       setLoadedModelId(null)
+      setStorageMode(null)
       setProgress(0)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -151,6 +154,7 @@ function App() {
         <label className="toggle"><input checked={ignoreEos} onChange={(event) => { setIgnoreEos(event.target.checked); setResult(null) }} type="checkbox" /> Ignore EOS for this run</label>
         <div className="temperature"><label htmlFor="temperature">Temperature <strong>{temperature.toFixed(1)}</strong></label><input id="temperature" max="1.5" min="0" onChange={(event) => setTemperature(Number(event.target.value))} step="0.1" type="range" value={temperature} /></div>
         <div className="model-readout"><span>Status</span><strong>{loadedModelId === model.id ? `${model.name} ready` : `${model.name} not loaded`}</strong><small>{status === 'loading' ? `Downloading ${Math.round(progress * 100)}%` : ignoreEos ? 'Hard cap: 72 generated tokens' : 'Stops on the model end marker'}</small></div>
+        {storageMode === 'memory' && <p className="storage-warning" role="status">Private storage is unavailable. The model is kept in memory for this tab and will download again next session.</p>}
         {status === 'generating'
           ? <button className="run-button stop" onClick={() => abortController.current?.abort()} type="button"><Square size={15} /> Stop generation</button>
           : <button className="run-button" disabled={status !== 'idle'} onClick={runGeneration} type="button">{status === 'loading' ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />} {loadedModelId === model.id ? 'Generate continuation' : 'Load model & generate'}</button>}

@@ -52,6 +52,7 @@ button:focus-visible,a:focus-visible,textarea:focus-visible { outline:3px solid 
 .reset-button { margin:12px auto 0; padding:7px; border:0; display:flex; align-items:center; gap:6px; background:transparent; color:var(--muted); font-size:10px; cursor:pointer; }
 .reset-button+.reset-button { margin-top:0; }.reset-button:disabled { opacity:.5; cursor:wait; }
 .error-message { padding:9px; border-left:3px solid #a52e28; background:#fff0ed; color:#81251e; font-size:10px; line-height:1.4; }
+.storage-warning { padding:9px; border-left:3px solid var(--yellow); background:#fff9df; color:var(--muted); font-size:10px; line-height:1.4; }
 .messages { display:grid; gap:16px; }
 .message { border-left:3px solid var(--coral); padding-left:13px; }
 .message.assistant { border-left-color:var(--green); }
