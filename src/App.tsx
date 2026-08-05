@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { ArrowRight, BookOpen, Braces, ExternalLink, LoaderCircle, MessageSquareText, Play, RotateCcw, ShieldCheck, Square, Trash2 } from 'lucide-react'
 import { FALSE_HISTORY_PRESETS, renderSmolLMChat, type ChatMessage, type Role } from './chat-template'
-import { clearModelCache, generateCompletion, loadBrowserModel, type GenerationResult } from './inference'
+import type { GenerationResult } from './inference'
 import { LESSONS } from './lessons'
 import { MODELS } from './models'
 
@@ -46,6 +46,7 @@ function App() {
     setError(null)
     setResult(null)
     try {
+      const { generateCompletion, loadBrowserModel } = await import('./inference')
       if (loadedModelId !== model.id) {
         setStatus('loading')
         setProgress(0)
@@ -73,6 +74,7 @@ function App() {
     setStatus('loading')
     setError(null)
     try {
+      const { clearModelCache } = await import('./inference')
       await clearModelCache()
       setLoadedModelId(null)
       setProgress(0)
